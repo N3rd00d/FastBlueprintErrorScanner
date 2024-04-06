@@ -8,17 +8,6 @@
 
 DECLARE_LOG_CATEGORY_EXTERN(LogFBES, Log, All);
 
-UENUM()
-namespace EFBESCompileResultState
-{
-	enum Type
-	{
-		Pass,
-		Warning,
-		Error
-	};
-}
-
 USTRUCT()
 struct FFBESCompileResult
 {
@@ -27,7 +16,7 @@ struct FFBESCompileResult
 	UPROPERTY()
 	FString AssetPath;
 	UPROPERTY()
-	int State = 0;
+	int NumErrors = 0;
 };
 
 USTRUCT()
@@ -58,11 +47,9 @@ struct FFBESBlueprintCompileProgressData
 	UPROPERTY()
 	int PassCount = 0;
 	UPROPERTY()
-	int WarningCount = 0;
-	UPROPERTY()
 	int ErrorCount = 0;
 	UPROPERTY()
 	int ProcessIndex = 0;
-	UPROPERTY()
-	int AssetTotalCount = 0;
 };
+
+const FString FBESPipeCode = TEXT("BPCR>");

@@ -4,14 +4,15 @@
 #include "Components/RichTextBlock.h"
 #include "Components/WidgetSwitcher.h"
 #include "FBESStruct.h"
+#include "Components/TextBlock.h"
 
 void UFBESListViewItemWidget::NativeOnListItemObjectSet(UObject* ListItemObject)
 {
 	UFBESListViewItemObject* ItemObject = Cast<UFBESListViewItemObject>(ListItemObject);
 	AssetPath = ItemObject->AssetPath;
-	
+
 	Text_AssetPath->SetText(FText::FromString(ItemObject->AssetPath));
-	Switcher_State->SetActiveWidgetIndex(ItemObject->State);
+	Switcher_State->SetActiveWidgetIndex(ItemObject->NumErrors > 0 ? 1 : 0);
 	Button_OpenAsset->OnClicked.AddUniqueDynamic(this, &UFBESListViewItemWidget::OnClickedButtonOpenAsset);
 }
 
@@ -24,6 +25,6 @@ void UFBESListViewItemWidget::OnClickedButtonOpenAsset()
 		return;
 	}
 
-	const TArray<UObject*> Assets { Asset };
+	const TArray<UObject*> Assets{Asset};
 	GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAssets(Assets);
 }

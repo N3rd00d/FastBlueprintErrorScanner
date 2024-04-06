@@ -24,7 +24,7 @@ int32 UFastBlueprintErrorScannerCommandlet::Main(const FString& Params)
 
 	KismetBlueprintCompilerModule = &FModuleManager::LoadModuleChecked<IKismetCompilerInterface>(TEXT("KismetCompiler"));
 	TArray<FFBESCompileResult> CompileResults;
-	
+
 	TArray<FAssetData> BlueprintAssetList;
 	TArray<FAssetData> WorldAssetList;
 	const FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
@@ -33,7 +33,7 @@ int32 UFastBlueprintErrorScannerCommandlet::Main(const FString& Params)
 	AssetRegistryModule.Get().GetAssetsByClass(UWorld::StaticClass()->GetFName(), WorldAssetList, true);
 	UE_LOG(LogFBESCmd, Log, TEXT("BlueprintAssetList : %d, WorldAssetList : %d"), BlueprintAssetList.Num(), WorldAssetList.Num());
 
-	FDateTime Time = FDateTime::Now();	
+	FDateTime Time = FDateTime::Now();
 	for (FAssetData const& Asset : BlueprintAssetList)
 	{
 		uint32 Hash = TextKeyUtil::HashString(Asset.ObjectPath.ToString());
@@ -43,14 +43,16 @@ int32 UFastBlueprintErrorScannerCommandlet::Main(const FString& Params)
 		}
 		FString const AssetPath = Asset.ObjectPath.ToString();
 		UBlueprint* Blueprint = Cast<UBlueprint>(StaticLoadObject(Asset.GetClass(), nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_DisableCompileOnLoad));
+		FFBESCompileResult CompileResult{Blueprint->GetPathName(), 0};
 		if (IsValid(Blueprint))
 		{
-			CompileBlueprint(Blueprint, CompileResults);
+			CompileResult.NumErrors = GetBlueprintCompileErrorCount(Blueprint);
 		}
-		WritePipeMessageAt2sInterval(Time, CompileResults);
+		CompileResults.Emplace(MoveTemp(CompileResult));
+		WritePipeMessageAtInterval2s(CompileResults, Time);
 	}
 	UE_LOG(LogFBESCmd, Log, TEXT("Blueprint CompileResults : %d"), CompileResults.Num());
-	
+
 	for (FAssetData const& Asset : WorldAssetList)
 	{
 		uint32 Hash = TextKeyUtil::HashString(Asset.ObjectPath.ToString());
@@ -60,23 +62,28 @@ int32 UFastBlueprintErrorScannerCommandlet::Main(const FString& Params)
 		}
 		FString const AssetPath = Asset.ObjectPath.ToString();
 		UObject* Object = StaticLoadObject(Asset.GetClass(), nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_DisableCompileOnLoad);
-		if (Object->IsA<UWorld>())
+		UWorld* World = Cast<UWorld>(Object);
+		FFBESCompileResult CompileResult{World->GetPathName(), 0};
+		if (IsValid(World) && IsValid(World->PersistentLevel))
 		{
-			UWorld* World = Cast<UWorld>(Object);
-			if (IsValid(World) && IsValid(World->PersistentLevel))
+			for (UBlueprint* Blueprint : World->PersistentLevel->GetLevelBlueprints())
 			{
-				for (UBlueprint* Blueprint : World->PersistentLevel->GetLevelBlueprints())
+				if (IsValid(Blueprint))
 				{
-					if (IsValid(Blueprint))
+					CompileResult.NumErrors = GetBlueprintCompileErrorCount(Blueprint);
+					if (CompileResult.NumErrors > 0)
 					{
-						CompileBlueprint(Blueprint, CompileResults);
+						break;
 					}
 				}
 			}
 		}
-		WritePipeMessageAt2sInterval(Time, CompileResults);
+		CompileResults.Emplace(MoveTemp(CompileResult));
+		WritePipeMessageAtInterval2s(CompileResults, Time);
 	}
+	WritePipeMessage(CompileResults);
 	UE_LOG(LogFBESCmd, Log, TEXT("World CompileResults : %d"), CompileResults.Num());
+	FPlatformProcess::Sleep(1.0);
 
 	FFBESCompileResultJsonFormat Format;
 	Format.Data = MoveTemp(CompileResults);
@@ -85,7 +92,7 @@ int32 UFastBlueprintErrorScannerCommandlet::Main(const FString& Params)
 	std::ofstream OutFile(TCHAR_TO_UTF8(*ReportFilePath));
 	OutFile << TCHAR_TO_UTF8(*JsonString);
 	OutFile.close();
-	
+
 	UE_LOG(LogFBESCmd, Log, TEXT("Commandlet Done"));
 	return 0;
 }
@@ -114,7 +121,7 @@ void UFastBlueprintErrorScannerCommandlet::ParseArguments(const FString& InParam
 	UE_LOG(LogFBESCmd, Log, TEXT("ProcessIndex : %d, TotalProcess : %d, ReportFilePath : %s"), ProcessIndex, TotalProcess, *ReportFilePath);
 }
 
-void UFastBlueprintErrorScannerCommandlet::CompileBlueprint(UBlueprint* InBlueprint, TArray<FFBESCompileResult>& RefCompileResultList)
+int UFastBlueprintErrorScannerCommandlet::GetBlueprintCompileErrorCount(UBlueprint* InBlueprint)
 {
 	FCompilerResultsLog MessageLog;
 	MessageLog.bSilentMode = true;
@@ -123,47 +130,33 @@ void UFastBlueprintErrorScannerCommandlet::CompileBlueprint(UBlueprint* InBluepr
 	FKismetEditorUtilities::CompileBlueprint(InBlueprint, EBlueprintCompileOptions::SkipSave | EBlueprintCompileOptions::BatchCompile, &MessageLog);
 	MessageLog.EndEvent();
 
-	FFBESCompileResult Result;
-	Result.AssetPath = InBlueprint->GetPathName();
-	Result.State = EFBESCompileResultState::Pass;
-	if (MessageLog.NumWarnings > 0)
-	{
-		Result.State = EFBESCompileResultState::Warning;
-	}
-	if (MessageLog.NumErrors > 0)
-	{
-		Result.State = EFBESCompileResultState::Error;
-	}
-	RefCompileResultList.Add(Result);
+	return MessageLog.NumErrors;
 }
 
-void UFastBlueprintErrorScannerCommandlet::WritePipeMessageAt2sInterval(FDateTime& RefTime, TArray<FFBESCompileResult>& RefCompileResults)
+void UFastBlueprintErrorScannerCommandlet::WritePipeMessageAtInterval2s(TArray<FFBESCompileResult>& RefCompileResults, FDateTime& RefTime)
 {
-	if (RefTime - FDateTime::Now() < FTimespan(0, 0, 2))
+	if (FDateTime::Now() - RefTime > FTimespan(0, 0, 2))
 	{
-		return;
+		RefTime = FDateTime::Now();
+		WritePipeMessage(RefCompileResults);
 	}
+}
 
+void UFastBlueprintErrorScannerCommandlet::WritePipeMessage(TArray<FFBESCompileResult>& RefCompileResults)
+{
 	int PassCount = 0;
-	int WarningCount = 0;
 	int ErrorCount = 0;
-	int TotalCount = RefCompileResults.Num();
 	for (FFBESCompileResult const& Result : RefCompileResults)
 	{
-		switch (Result.State)
+		if (Result.NumErrors == 0)
 		{
-		case EFBESCompileResultState::Pass:
 			PassCount++;
-			break;
-		case EFBESCompileResultState::Warning:
-			WarningCount++;
-			break;
-		case EFBESCompileResultState::Error:
+		}
+		else
+		{
 			ErrorCount++;
-			break;
 		}
 	}
 
-	RefTime = FDateTime::Now();
-	UE_LOG(LogFBESCmd, Display, TEXT("BPCP>%d,%d,%d,%d"), PassCount, WarningCount, ErrorCount, TotalCount);
+	UE_LOG(LogFBESCmd, Display, TEXT("%s%d,%d"), *FBESPipeCode, PassCount, ErrorCount);
 }

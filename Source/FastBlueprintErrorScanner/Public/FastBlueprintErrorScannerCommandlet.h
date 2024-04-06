@@ -19,8 +19,9 @@ class FASTBLUEPRINTERRORSCANNER_API UFastBlueprintErrorScannerCommandlet : publi
 	virtual int32 Main(const FString& Params) override;
 
 	void ParseArguments(const FString& InParams);
-	void CompileBlueprint(UBlueprint* InBlueprint, TArray<FFBESCompileResult>& RefCompileResultList);
-	void WritePipeMessageAt2sInterval(FDateTime& RefTime, TArray<FFBESCompileResult>& RefCompileResults);
+	int GetBlueprintCompileErrorCount(UBlueprint* InBlueprint);
+	void WritePipeMessageAtInterval2s(TArray<FFBESCompileResult>& RefCompileResults, FDateTime& RefTime);
+	void WritePipeMessage(TArray<FFBESCompileResult>& RefCompileResults);
 
 	int ProcessIndex = -1;
 	int TotalProcess = 0;

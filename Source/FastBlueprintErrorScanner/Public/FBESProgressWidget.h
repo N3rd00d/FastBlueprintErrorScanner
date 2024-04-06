@@ -22,8 +22,6 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* Text_CountPass;
 	UPROPERTY(meta = (BindWidget))
-	UTextBlock* Text_CountWarning;
-	UPROPERTY(meta = (BindWidget))
 	UTextBlock* Text_CountError;
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* Text_EclipseTime;
@@ -38,19 +36,23 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 	void InitWidget();
-	void OnCompleteRunnable(int InError, int InProcessIndex, FRunnableThread* InThread);
+	void OnCompleteRunnable(int InError, int InProcessIndex);
 	void OnProgressRunnable(FFBESBlueprintCompileProgressData const& InData);
 	void OnCompleteRunnableAll();
 
 	UFUNCTION()
 	void OnClickedButtonClose();
 	void UpdateProgressUI();
-	
+
 public:
 	DECLARE_DELEGATE_OneParam(FOnCloseWidgetDelegate, TArray<FFBESCompileResult> const&);
 	FOnCloseWidgetDelegate& GetOnCloseDelegate();
+	
+	void SetRunAsMultiThread(bool bMultiThread);
+	void Run();
 
 protected:
 	int RunProcessCount = 0;
@@ -60,4 +62,7 @@ protected:
 	TMap<int, FFBESBlueprintCompileProgressData> ProgressDataMap;
 	FOnCloseWidgetDelegate OnCloseWidgetDelegate;
 	FTimerHandle TimerHandle;
+	bool bRunAsMultiThread = true;
+	bool bRunningRunnable = false;
+	int TotalBlueprintAssetCount = 0;
 };

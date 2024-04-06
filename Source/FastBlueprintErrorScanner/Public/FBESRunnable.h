@@ -8,21 +8,26 @@
 class FASTBLUEPRINTERRORSCANNER_API FBESRunnable : public FRunnable
 {
 public:
-    FBESRunnable(int InProcessIndex, int InRunProcessCount, FString InReportFilePath);
+	FBESRunnable(int InProcessIndex, int InRunProcessCount, FString InReportFilePath);
+	~FBESRunnable();
 
 	DECLARE_DELEGATE_TwoParams(FOnCompleteDelegate, int, int);
 	FOnCompleteDelegate& GetCompleteDelegate();
 	DECLARE_DELEGATE_OneParam(FOnProgressDelegate, FFBESBlueprintCompileProgressData const&);
-    FOnProgressDelegate& GetProgressDelegate();
+	FOnProgressDelegate& GetProgressDelegate();
 
-    void HandlePipeMessage(const FString& InCommandletLogMessage);
+	void ParseReadPipeMessage(const FString& InLogMessage);
 	virtual uint32 Run() override;
-    virtual void Stop() override;
+	virtual void Stop() override;
+	FString GetExecutableForCommandlets();
 
 protected:
-    int ProcessIndex = -1;
-    int RunProcessCount = 0;
-    FString ReportFilePath;
 	FOnCompleteDelegate OnCompleteDelegate;
 	FOnProgressDelegate OnProgressDelegate;
+	
+	int ProcessIndex = -1;
+	int RunProcessCount = 0;
+	FString ReportFilePath;
+	bool bStop = false;
+	FRunnableThread* Thread = nullptr;
 };

@@ -10,6 +10,19 @@ FBESRunnable::FBESRunnable(int InProcessIndex, int InRunProcessCount, FString In
 	ProcessIndex = InProcessIndex;
 	RunProcessCount = InRunProcessCount;
 	ReportFilePath = InReportFilePath;
+
+	const FString ThreadName = FString::Printf(TEXT("FBESRunnable_%d"), ProcessIndex);
+	Thread = FRunnableThread::Create(this, *ThreadName);
+}
+
+FBESRunnable::~FBESRunnable()
+{
+	if (Thread)
+	{
+		Thread->Kill();
+		delete Thread;
+		UE_LOG(LogFBES, Log, TEXT("Thread is killed"));
+	}
 }
 
 FBESRunnable::FOnCompleteDelegate& FBESRunnable::GetCompleteDelegate()
@@ -22,36 +35,40 @@ FBESRunnable::FOnProgressDelegate& FBESRunnable::GetProgressDelegate()
 	return OnProgressDelegate;
 }
 
-void FBESRunnable::HandlePipeMessage(const FString& InCommandletLogMessage)
+void FBESRunnable::ParseReadPipeMessage(const FString& InLogMessage)
 {
-	const FString MessageCode = TEXT("BPCP>");
-	if (false == InCommandletLogMessage.Contains(MessageCode))
+	TArray<FString> Lines;
+	InLogMessage.ParseIntoArrayLines(Lines);
+	const int LineIndex = Lines.FindLastByPredicate([](FString const& Line)
 	{
-		return;	
+		return Line.Contains(FBESPipeCode);	
+	});
+	if (LineIndex == INDEX_NONE)
+	{
+		UE_LOG(LogFBES, Error, TEXT("Index is INDEX_NONE"));
+		return;
 	}
 
 	FString SplitLeft, Message;
-	InCommandletLogMessage.Split(MessageCode, &SplitLeft, &Message);
+	Lines[LineIndex].Split(FBESPipeCode, &SplitLeft, &Message);
 
 	if (Message.IsEmpty())
 	{
-		UE_LOG(LogFBES, Error, TEXT("HandlePipeMessage: SplitRight is empty"));
+		UE_LOG(LogFBES, Error, TEXT("Message is empty"));
 		return;
 	}
 
 	TArray<FString> ParsedData;
 	Message.ParseIntoArray(ParsedData, TEXT(","));
-	if (ParsedData.Num() < 4)
+	if (ParsedData.Num() < 2)
 	{
-		UE_LOG(LogFBES, Error, TEXT("HandlePipeMessage: Parse.Num() < 4"));
+		UE_LOG(LogFBES, Error, TEXT("ParsedData.Num() < 2"));
 		return;
 	}
 
 	FFBESBlueprintCompileProgressData Data;
 	Data.PassCount = FCString::Atoi(*ParsedData[0]);
-	Data.WarningCount = FCString::Atoi(*ParsedData[1]);
-	Data.ErrorCount = FCString::Atoi(*ParsedData[2]);
-	Data.AssetTotalCount = FCString::Atoi(*ParsedData[3]);
+	Data.ErrorCount = FCString::Atoi(*ParsedData[1]);
 	Data.ProcessIndex = ProcessIndex;
 	OnProgressDelegate.ExecuteIfBound(Data);
 }
@@ -59,7 +76,7 @@ void FBESRunnable::HandlePipeMessage(const FString& InCommandletLogMessage)
 uint32 FBESRunnable::Run()
 {
 	UE_LOG(LogFBES, Log, TEXT("FBESRunnable::Run"));
-	
+
 	int ReturnCode = EFBESRunnableError::Type::Ok;
 	void* ReadPipe = nullptr;
 	void* WritePipe = nullptr;
@@ -72,10 +89,11 @@ uint32 FBESRunnable::Run()
 			break;
 		}
 
+		const FString LogFileName = FString::Printf(TEXT("FastBlueprintErrorScanner_%d.log"), ProcessIndex);
 		const FString ProjectFilePath = FString::Printf(TEXT("\"%s\""), *FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath()));
-		const FString AdditionalArgs = TEXT("-NoShaderCompile -ProcessIndex=") + FString::FromInt(ProcessIndex) + TEXT(" -TotalProcess=") + FString::FromInt(RunProcessCount) + TEXT(" -ReportFilePath=") + ReportFilePath;
+		const FString AdditionalArgs = TEXT("-NoShaderCompile -ProcessIndex=") + FString::FromInt(ProcessIndex) + TEXT(" -TotalProcess=") + FString::FromInt(RunProcessCount) + TEXT(" -ReportFilePath=") + ReportFilePath + TEXT(" -LOG=") + LogFileName;
 		const FString ProcessArguments = CommandletHelpers::BuildCommandletProcessArguments(TEXT("FastBlueprintErrorScanner"), *ProjectFilePath, *AdditionalArgs);
-		const FString ExecutableURL = FUnrealEdMisc::Get().GetExecutableForCommandlets();
+		const FString ExecutableURL = GetExecutableForCommandlets();
 		FProcHandle CommandletProcessHandle = FPlatformProcess::CreateProc(*ExecutableURL, *ProcessArguments, true, true, true, nullptr, 0, nullptr, WritePipe);
 		if (false == CommandletProcessHandle.IsValid())
 		{
@@ -84,12 +102,12 @@ uint32 FBESRunnable::Run()
 			break;
 		}
 
-		while (true)
+		while (false == bStop)
 		{
 			const FString PipeString = FPlatformProcess::ReadPipe(ReadPipe);
 			if (false == PipeString.IsEmpty())
 			{
-				HandlePipeMessage(PipeString);
+				ParseReadPipeMessage(PipeString);
 			}
 
 			if (false == FPlatformProcess::IsProcRunning(CommandletProcessHandle) && PipeString.IsEmpty())
@@ -112,4 +130,33 @@ uint32 FBESRunnable::Run()
 void FBESRunnable::Stop()
 {
 	UE_LOG(LogFBES, Log, TEXT("FBESRunnable::Stop"));
+	bStop = true;	
+}
+
+FString FBESRunnable::GetExecutableForCommandlets()
+{
+	FString ExecutableName;
+#if WITH_EDITOR
+	ExecutableName = FString(FPlatformProcess::ExecutablePath());
+#if PLATFORM_WINDOWS
+	if (ExecutableName.EndsWith(".exe", ESearchCase::IgnoreCase) && !FPaths::GetBaseFilename(ExecutableName).EndsWith("-cmd", ESearchCase::IgnoreCase))
+	{
+		FString NewExeName = ExecutableName.Left(ExecutableName.Len() - 4) + "-Cmd.exe";
+		if (FPaths::FileExists(NewExeName))
+		{
+			ExecutableName = NewExeName;
+		}
+	}
+#elif PLATFORM_MAC
+	if (false == FPaths::GetBaseFilename(ExecutableName).EndsWith("-cmd", ESearchCase::IgnoreCase))
+	{
+		FString NewExeName = ExecutableName + "-Cmd";
+		if (FPaths::FileExists(NewExeName))
+		{
+			ExecutableName = NewExeName;
+		}
+	}
+#endif
+#endif
+	return ExecutableName;
 }

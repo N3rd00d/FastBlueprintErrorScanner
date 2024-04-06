@@ -26,10 +26,13 @@ protected:
 	UFUNCTION()
 	void OnCloseProgressWidget(TArray<FFBESCompileResult> const& InList);
 
-	void UpdateUI();
+	void UpdateListView();
 
 	UFUNCTION()
-	void OnCheckStateChanged(bool bChecked);
+	void OnChangeErrorFilter(bool bChecked);
+	
+	UFUNCTION()
+	void OnChangeMultiThreadOnOff(bool bIsChecked);
 
 public:
 	UPROPERTY(meta = (BindWidget))
@@ -39,12 +42,16 @@ public:
 	UCheckBox* CheckBox_Error;
 
 	UPROPERTY(meta = (BindWidget))
-	UCheckBox* CheckBox_Warning;
+	UCheckBox* CheckBox_MultiThread;
 
 	UPROPERTY(meta = (BindWidget))
 	UListView* ListView_Blueprint;
 
 protected:
-	TArray<FFBESCompileResult> BlueprintCompileStateList;
 	FName ProgressWidgetTabId;
+
+private:
+	static TArray<FFBESCompileResult> BlueprintCompileStateList;
+	static ECheckBoxState ErrorCheckedState;
+	static ECheckBoxState MultiThreadCheckedState;
 };
