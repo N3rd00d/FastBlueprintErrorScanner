@@ -25,6 +25,7 @@ class FASTBLUEPRINTERRORSCANNER_API UFastBlueprintErrorScannerCommandlet : publi
 
 	int ProcessIndex = -1;
 	int TotalProcess = 0;
+	int TotalAssetCount = 0;
 	FString ReportFilePath;
 	IKismetCompilerInterface* KismetBlueprintCompilerModule;
 };

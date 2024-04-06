@@ -50,6 +50,8 @@ struct FFBESBlueprintCompileProgressData
 	int ErrorCount = 0;
 	UPROPERTY()
 	int ProcessIndex = 0;
+	UPROPERTY()
+	int TotalCount = 0;
 };
 
 const FString FBESPipeCode = TEXT("BPCR>");

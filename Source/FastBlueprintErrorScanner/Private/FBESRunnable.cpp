@@ -60,15 +60,16 @@ void FBESRunnable::ParseReadPipeMessage(const FString& InLogMessage)
 
 	TArray<FString> ParsedData;
 	Message.ParseIntoArray(ParsedData, TEXT(","));
-	if (ParsedData.Num() < 2)
+	if (ParsedData.Num() < 3)
 	{
-		UE_LOG(LogFBES, Error, TEXT("ParsedData.Num() < 2"));
+		UE_LOG(LogFBES, Error, TEXT("ParsedData.Num() < 3"));
 		return;
 	}
 
 	FFBESBlueprintCompileProgressData Data;
 	Data.PassCount = FCString::Atoi(*ParsedData[0]);
 	Data.ErrorCount = FCString::Atoi(*ParsedData[1]);
+	Data.TotalCount = FCString::Atoi(*ParsedData[2]);
 	Data.ProcessIndex = ProcessIndex;
 	OnProgressDelegate.ExecuteIfBound(Data);
 }
@@ -91,7 +92,7 @@ uint32 FBESRunnable::Run()
 
 		const FString LogFileName = FString::Printf(TEXT("FastBlueprintErrorScanner_%d.log"), ProcessIndex);
 		const FString ProjectFilePath = FString::Printf(TEXT("\"%s\""), *FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath()));
-		const FString AdditionalArgs = TEXT("-NoShaderCompile -ProcessIndex=") + FString::FromInt(ProcessIndex) + TEXT(" -TotalProcess=") + FString::FromInt(RunProcessCount) + TEXT(" -ReportFilePath=") + ReportFilePath + TEXT(" -LOG=") + LogFileName;
+		const FString AdditionalArgs = TEXT("-NoShaderCompile -ProcessIndex=") + FString::FromInt(ProcessIndex) + TEXT(" -TotalProcess=") + FString::FromInt(RunProcessCount) + TEXT(" -ReportFilePath=\"") + ReportFilePath + TEXT("\"") + TEXT(" -LOG=") + LogFileName;
 		const FString ProcessArguments = CommandletHelpers::BuildCommandletProcessArguments(TEXT("FastBlueprintErrorScanner"), *ProjectFilePath, *AdditionalArgs);
 		const FString ExecutableURL = GetExecutableForCommandlets();
 		FProcHandle CommandletProcessHandle = FPlatformProcess::CreateProc(*ExecutableURL, *ProcessArguments, true, true, true, nullptr, 0, nullptr, WritePipe);

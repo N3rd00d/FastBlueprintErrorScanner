@@ -13,7 +13,7 @@
 
 TArray<FFBESCompileResult> UFBESMainWidget::BlueprintCompileStateList;
 ECheckBoxState UFBESMainWidget::ErrorCheckedState = ECheckBoxState::Unchecked;
-ECheckBoxState UFBESMainWidget::MultiThreadCheckedState = ECheckBoxState::Unchecked;
+ECheckBoxState UFBESMainWidget::MultiThreadCheckedState = ECheckBoxState::Checked;
 
 void UFBESMainWidget::NativeConstruct()
 {

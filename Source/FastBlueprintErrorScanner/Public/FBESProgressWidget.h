@@ -64,5 +64,4 @@ protected:
 	FTimerHandle TimerHandle;
 	bool bRunAsMultiThread = true;
 	bool bRunningRunnable = false;
-	int TotalBlueprintAssetCount = 0;
 };

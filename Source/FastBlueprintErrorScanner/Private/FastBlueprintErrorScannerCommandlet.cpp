@@ -9,6 +9,7 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Kismet2/CompilerResultsLog.h"
 #include "Kismet2/KismetEditorUtilities.h"
+#include "Misc/FileHelper.h"
 
 DEFINE_LOG_CATEGORY(LogFBESCmd)
 
@@ -31,7 +32,8 @@ int32 UFastBlueprintErrorScannerCommandlet::Main(const FString& Params)
 	AssetRegistryModule.Get().SearchAllAssets(true);
 	AssetRegistryModule.Get().GetAssetsByClass(UBlueprint::StaticClass()->GetFName(), BlueprintAssetList, true);
 	AssetRegistryModule.Get().GetAssetsByClass(UWorld::StaticClass()->GetFName(), WorldAssetList, true);
-	UE_LOG(LogFBESCmd, Log, TEXT("BlueprintAssetList : %d, WorldAssetList : %d"), BlueprintAssetList.Num(), WorldAssetList.Num());
+	TotalAssetCount = BlueprintAssetList.Num() + WorldAssetList.Num();
+	UE_LOG(LogFBESCmd, Log, TEXT("TotalAssetCount : %d"), TotalAssetCount);
 
 	FDateTime Time = FDateTime::Now();
 	for (FAssetData const& Asset : BlueprintAssetList)
@@ -89,9 +91,10 @@ int32 UFastBlueprintErrorScannerCommandlet::Main(const FString& Params)
 	Format.Data = MoveTemp(CompileResults);
 	FString JsonString;
 	FJsonObjectConverter::UStructToJsonObjectString(Format, JsonString);
-	std::ofstream OutFile(TCHAR_TO_UTF8(*ReportFilePath));
-	OutFile << TCHAR_TO_UTF8(*JsonString);
-	OutFile.close();
+	if (false == FFileHelper::SaveStringToFile(JsonString, *ReportFilePath))
+	{
+		UE_LOG(LogFBESCmd, Error, TEXT("Failed to save file : %s"), *ReportFilePath);
+	}
 
 	UE_LOG(LogFBESCmd, Log, TEXT("Commandlet Done"));
 	return 0;
@@ -157,6 +160,5 @@ void UFastBlueprintErrorScannerCommandlet::WritePipeMessage(TArray<FFBESCompileR
 			ErrorCount++;
 		}
 	}
-
-	UE_LOG(LogFBESCmd, Display, TEXT("%s%d,%d"), *FBESPipeCode, PassCount, ErrorCount);
+	UE_LOG(LogFBESCmd, Display, TEXT("%s%d,%d,%d"), *FBESPipeCode, PassCount, ErrorCount, TotalAssetCount);
 }

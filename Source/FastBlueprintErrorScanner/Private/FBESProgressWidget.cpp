@@ -28,15 +28,6 @@ void UFBESProgressWidget::NativeConstruct()
 	DoneProcessCount = 0;
 	bRunningRunnable = false;
 	
-	TArray<FAssetData> BlueprintAssetList;
-	TArray<FAssetData> WorldAssetList;
-	const FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
-	AssetRegistryModule.Get().SearchAllAssets(true);
-	AssetRegistryModule.Get().GetAssetsByClass(UBlueprint::StaticClass()->GetFName(), BlueprintAssetList, true);
-	AssetRegistryModule.Get().GetAssetsByClass(UWorld::StaticClass()->GetFName(), WorldAssetList, true);
-	TotalBlueprintAssetCount = BlueprintAssetList.Num() + WorldAssetList.Num();
-	UE_LOG(LogFBES, Log, TEXT("TotalBlueprintAssetCount : %d"), TotalBlueprintAssetCount);
-	
 	InitWidget();
 
 	const FString Directory = GetReportDirectory();
@@ -157,17 +148,19 @@ void UFBESProgressWidget::UpdateProgressUI()
 
 	int PassCount = 0;
 	int ErrorCount = 0;
+	int TotalCount = 0;
 	for (auto It = ProgressDataMap.CreateIterator(); It; ++It)
 	{
 		FFBESBlueprintCompileProgressData const& Data = It.Value();
 		PassCount += Data.PassCount;
 		ErrorCount += Data.ErrorCount;
+		TotalCount = Data.TotalCount;
 	}
 	float ZeroToOne = 0;
 
-	if (TotalBlueprintAssetCount > 0)
+	if (TotalCount > 0)
 	{
-		ZeroToOne = (float)(PassCount + ErrorCount) / (float)TotalBlueprintAssetCount;
+		ZeroToOne = (float)(PassCount + ErrorCount) / (float)TotalCount;
 		ZeroToOne = FMath::Clamp(ZeroToOne, 0.0f, 1.0f);
 	}
 	const int ProgressPercent = FMath::Clamp((int)(100.0f * ZeroToOne), 0, 100);
